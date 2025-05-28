@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python配列ビジュアライザー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to top for vertical content */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #app-container {
+            width: 100%;
+            max-width: 400px; /* Max width for smartphone vertical screen */
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 80vh; /* Ensure enough height for content */
+        }
+        #code-editor {
+            background-color: #282c34;
+            color: #abb2bf;
+            font-family: 'Fira Code', 'Monaco', 'Consolas', 'monospace';
+            font-size: 14px;
+            padding: 16px;
+            border-radius: 8px;
+            resize: none;
+            outline: none;
+            border: 1px solid #3e4451;
+            min-height: 120px;
+            line-height: 1.5;
+        }
+        .array-box {
+            background-color: #61dafb;
+            color: #282c34;
+            border: 2px solid #21a1f1;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 60px; /* Fixed width for boxes */
+            height: 60px; /* Fixed height for boxes */
+            margin: 4px;
+            font-weight: 600;
+            transition: transform 0.3s ease-out, background-color 0.3s ease-out;
+            position: relative; /* For pseudo-element positioning */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        /* The "lid" pseudo-element */
+        .array-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #61dafb; /* Same as box background */
+            border-radius: 8px; /* Match box border-radius */
+            transform-origin: top center; /* Rotate from the top edge */
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out; /* Animation for lid opening */
+            z-index: 2; /* Above the number */
+            border: 2px solid #21a1f1; /* Match box border */
+            box-sizing: border-box; /* Include padding/border in width/height */
+        }
+        .array-box.highlight::before {
+            transform: rotateX(-90deg); /* Open the lid */
+            opacity: 0; /* Make it disappear after opening */
+        }
+        .array-box.highlight {
+            background-color: #a2e6ff;
+            transform: scale(1.05);
+        }
+        .array-index {
+            font-size: 10px;
+            color: #4a5568;
+            margin-top: 4px;
+        }
+        .popped-out-value {
+            position: absolute;
+            background-color: #4CAF50; /* Green background */
+            color: white;
+            padding: 10px 15px;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+            opacity: 0; /* Start hidden */
+            z-index: 3; /* Ensure it's above the lid */
+            transform: translate(-50%, -50%); /* Center relative to its left/top */
+            transition: left 0.8s ease-in-out, top 0.8s ease-in-out, opacity 0.3s ease-out; /* For movement and fade */
+        }
+
+        /* Updated output-message styling */
+        .output-message {
+            background-color: #2563EB; /* Tailwind blue-600 */
+            color: white;
+            padding: 12px 24px; /* py-3 px-6 equivalent */
+            border-radius: 12px; /* rounded-xl equivalent */
+            font-size: 16px;
+            text-align: left; /* Align text to left */
+            font-weight: 700; /* font-bold equivalent */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg equivalent */
+            display: flex; /* Use flexbox for vertical alignment */
+            align-items: center; /* Vertically center content */
+            min-height: 48px; /* Approximate height of the button */
+        }
+
+        #character {
+            position: absolute;
+            background-color: #8B5CF6; /* Purple */
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px; /* Emoji size */
+            z-index: 1; /* Below lid, above array boxes */
+            left: 0; /* Initial left position will be set in JS */
+            top: 30px; /* Position character's top 30px from array-visualization top */
+            transform: translateX(-100%); /* Start off-screen left */
+            transition: transform 1s ease-in-out, opacity 0.3s ease-out; /* Added opacity transition */
+        }
+
+        /* New explosion animation for character */
+        @keyframes explode-character {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(3); /* Scale up and disappear */
+            }
+        }
+
+        .character-exploding {
+            animation: explode-character 0.5s ease-out forwards;
+            /* Ensure no other transitions interfere during explosion */
+            transition: none !important; /* Override other transitions during explosion */
+        }
+
+        /* Explosion flash overlay */
+        #explosion-flash {
+            position: fixed; /* Changed to fixed to cover entire viewport */
+            top: 0;
+            left: 0;
+            width: 100vw; /* Cover entire viewport width */
+            height: 100vh; /* Cover entire viewport height */
+            background-color: white;
+            opacity: 0; /* Start hidden */
+            z-index: 9999; /* On top of everything else */
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+
+        @keyframes flash-animation {
+            0% { opacity: 0; }
+            10% { opacity: 1; } /* Quick flash to full opacity */
+            100% { opacity: 0; } /* Fade out */
+        }
+
+        .flash-active {
+            animation: flash-animation 0.2s ease-out forwards; /* Short, sharp flash */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div id="app-container" class="flex flex-col p-6 space-y-6">
+        <h1 class="text-2xl font-bold text-center text-gray-800">Python配列ビジュアライザー</h1>
+
+        <div class="flex flex-col space-y-2">
+            <label for="code-editor" class="text-gray-700 font-semibold">コードを入力してください:</label>
+            <textarea id="code-editor" class="w-full rounded-lg shadow-inner" placeholder="例:
+array = [10, 20, 30, 40, 50]
+print(array[2])
+print(array[0])"></textarea>
+            <button id="run-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
+                実行
+            </button>
+        </div>
+
+        <div class="flex flex-col space-y-4 items-center">
+            <h2 class="text-xl font-bold text-gray-800">配列工場:</h2>
+            <div id="array-visualization" class="flex flex-wrap justify-center items-end min-h-[150px] relative">
+                <div id="character" style="display: none; opacity: 0;">🤖</div>
+            </div>
+            <div id="output-message" class="output-message w-full mt-4">出力: </div>
+        </div>
+    </div>
+    <div id="explosion-flash"></div> <script>
+        // DOM要素の参照を取得
+        const codeEditor = document.getElementById('code-editor');
+        const runButton = document.getElementById('run-button');
+        const arrayVisualization = document.getElementById('array-visualization');
+        const outputMessage = document.getElementById('output-message');
+        const character = document.getElementById('character'); // Get character element
+        const explosionFlash = document.getElementById('explosion-flash'); // Get explosion flash element
+
+        // デフォルトのコードを設定
+        codeEditor.value = `array = [10, 20, 30, 40, 50]
+print(array[2])
+print(array[0])
+print(array[10]) # This will cause an out-of-range error`;
+
+        let currentArray = []; // 現在の配列データを保持
+        let animationQueue = []; // アニメーションキュー
+        let isAnimating = false; // アニメーション実行中フラグ
+
+        // Helper to wait for a duration
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 配列を視覚的にレンダリングする関数
+        function renderArray(arr) {
+            // Clear existing array boxes
+            const existingBoxes = arrayVisualization.querySelectorAll('.flex.flex-col.items-center');
+            existingBoxes.forEach(box => box.remove());
+
+            // Re-append character to ensure it's always in the DOM
+            if (!arrayVisualization.contains(character)) {
+                arrayVisualization.appendChild(character);
+            }
+            // explosionFlash is now outside arrayVisualization, no need to re-append here.
+
+            outputMessage.textContent = '出力: '; // メッセージ内容をクリアして初期状態に戻す
+
+            arr.forEach((value, index) => {
+                const boxContainer = document.createElement('div');
+                boxContainer.className = 'flex flex-col items-center';
+
+                const arrayBox = document.createElement('div');
+                arrayBox.className = 'array-box';
+                arrayBox.textContent = value; // Value is directly in arrayBox
+                arrayBox.dataset.index = index; // データセットにインデックスを保存
+
+                const arrayIndex = document.createElement('div');
+                arrayIndex.className = 'array-index';
+                arrayIndex.textContent = `[${index}]`;
+
+                boxContainer.appendChild(arrayBox);
+                boxContainer.appendChild(arrayIndex);
+                arrayVisualization.appendChild(boxContainer);
+            });
+        }
+
+        /**
+         * 単一の要素アクセスアニメーションを実行する非同期関数
+         * @param {number} index - アクセスする配列のインデックス
+         * @param {*} value - アクセスされる値
+         * @returns {Promise<void>} アニメーション完了時に解決するPromise
+         */
+        async function animatePopOut(index, value) {
+            const targetBox = arrayVisualization.querySelector(`.array-box[data-index="${index}"]`);
+            if (!targetBox) return; // Resolve implicitly if box not found
+
+            // Get bounding rectangles for calculations
+            const boxRect = targetBox.getBoundingClientRect();
+            const containerRect = arrayVisualization.getBoundingClientRect();
+            const outputRect = outputMessage.getBoundingClientRect();
+
+            // Calculate positions relative to arrayVisualization container
+            const targetBoxCenterX = (boxRect.left - containerRect.left) + (boxRect.width / 2);
+            const targetBoxCenterY = (boxRect.top - containerRect.top) + (boxRect.height / 2);
+
+            const relativeOutputCenterX = (outputRect.left + outputRect.width / 2) - containerRect.left;
+            const relativeOutputCenterY = (outputRect.top + outputRect.height / 2) - containerRect.top;
+
+            // Phase 1: Character walks to the target box
+            character.style.display = 'flex'; // Ensure character is visible
+            character.style.opacity = '1'; // Ensure it's fully visible when it appears
+            character.classList.remove('character-exploding'); // Ensure explosion class is not active
+
+            // Check if character is currently off-screen (e.g., first animation in queue)
+            const currentCharacterTransform = window.getComputedStyle(character).transform;
+            const matrix = new DOMMatrixReadOnly(currentCharacterTransform);
+            const currentCharacterX = matrix.m41; // Get the translateX value
+
+            if (currentCharacterX < 0) { // Check if off-screen (initial or after full exit)
+                character.style.transition = 'none'; // No transition for initial placement
+                character.style.transform = 'translateX(-100%)'; // Place off-screen left
+                void character.offsetWidth; // Force reflow
+            }
+
+            const characterWalkDuration = 800;
+            character.style.transition = `transform ${characterWalkDuration / 1000}s ease-in-out`;
+            character.style.transform = `translateX(${targetBoxCenterX - (character.offsetWidth / 2)}px)`;
+
+            await delay(characterWalkDuration);
+
+            // Phase 2: Open the lid
+            targetBox.classList.add('highlight');
+            const lidOpenDelay = 300;
+            await delay(lidOpenDelay);
+
+            // Phase 3: Number appears and character + number move to output
+            const poppedValueDiv = document.createElement('div');
+            poppedValueDiv.className = 'popped-out-value';
+            poppedValueDiv.textContent = value;
+            arrayVisualization.appendChild(poppedValueDiv);
+
+            poppedValueDiv.style.left = `${targetBoxCenterX}px`;
+            poppedValueDiv.style.top = `${targetBoxCenterY}px`;
+            poppedValueDiv.style.opacity = '1';
+
+            const carryDuration = 800;
+            character.style.transition = `transform ${carryDuration / 1000}s ease-in-out`;
+            poppedValueDiv.style.transition = `left ${carryDuration / 1000}s ease-in-out, top ${carryDuration / 1000}s ease-in-out, opacity 0.3s ease-out`;
+
+            const charTargetXForOutput = relativeOutputCenterX - (character.offsetWidth / 2);
+            const charTargetYOffsetForOutput = (relativeOutputCenterY - (character.offsetHeight / 2)) - 30; // Relative to character's top: 30px
+            character.style.transform = `translateX(${charTargetXForOutput}px) translateY(${charTargetYOffsetForOutput}px)`;
+
+            poppedValueDiv.style.left = `${relativeOutputCenterX}px`;
+            poppedValueDiv.style.top = `${relativeOutputCenterY}px`;
+
+            await delay(carryDuration);
+
+            // Phase 4: Output update and cleanup for this step
+            outputMessage.textContent = `出力: ${value}`;
+            poppedValueDiv.remove();
+            targetBox.classList.remove('highlight');
+            // Character remains visible at the output field position
+        }
+
+        /**
+         * ロボットが爆発するアニメーションを実行する非同期関数
+         * @param {number} index - 範囲外のインデックス
+         * @returns {Promise<void>} アニメーション完了時に解決するPromise
+         */
+        async function animateExplosion(index) {
+            character.style.display = 'flex';
+            character.style.opacity = '1';
+            character.classList.remove('character-exploding'); // Ensure no previous explosion animation is active
+
+            // Reset character's transition for immediate positioning
+            character.style.transition = 'none';
+
+            // Position character at the top center of array-visualization for explosion
+            const containerRect = arrayVisualization.getBoundingClientRect();
+            const relativeContainerCenterX = containerRect.width / 2;
+            const fixedExplosionTop = 0; // Position at the very top of the array-visualization container
+
+            character.style.left = `${relativeContainerCenterX}px`; // Use left for horizontal centering
+            character.style.top = `${fixedExplosionTop}px`; // Set fixed top
+            character.style.transform = 'translate(-50%, 0)'; // Adjust transform to center horizontally based on left: 50%
+
+            void character.offsetWidth; // Force reflow for initial positioning
+
+            // Phase 1: Grow and hint at explosion (1 second)
+            const preExplosionDuration = 1000; // 1 second
+            // Apply transition for scaling and opacity only
+            character.style.transition = `transform ${preExplosionDuration / 1000}s ease-in-out, opacity ${preExplosionDuration / 1000}s ease-in-out`;
+            character.style.transform = 'translate(-50%, 0) scale(1.8)'; // Grow larger while staying centered
+            character.style.opacity = '0.7'; // Slight transparency to hint at instability
+
+            await delay(preExplosionDuration);
+
+            // Phase 2: Actual explosion (flash and character explosion)
+            // Trigger flash
+            explosionFlash.classList.add('flash-active');
+            
+            // Trigger character explosion
+            character.style.transition = 'none'; // Remove scaling/opacity transition before explosion
+            character.classList.add('character-exploding'); // Apply explosion animation
+            const explosionDuration = 500; // This duration should cover the flash duration too
+            await delay(explosionDuration);
+
+            // Reset character state after explosion
+            character.classList.remove('character-exploding');
+            character.style.transition = 'none'; // Clear animation
+            character.style.opacity = '0'; // Immediately make it transparent
+            character.style.display = 'none'; // Immediately hide it
+            
+            // Reset flash
+            explosionFlash.classList.remove('flash-active');
+            explosionFlash.style.opacity = '0'; // Ensure it's fully transparent
+
+            // Now, reset transform and position while it's hidden
+            character.style.left = '0'; // Reset left to 0
+            character.style.top = '30px'; // Reset top to original walking position
+            character.style.transform = 'translateX(-100%)'; // Reset to off-screen for next use
+
+            outputMessage.textContent = `エラー: インデックス ${index} は範囲外です。ロボットが壊れました！`;
+        }
+
+
+        /**
+         * Processes the animation queue sequentially.
+         */
+        async function processAnimationQueue() {
+            if (isAnimating) return; // Already processing
+
+            isAnimating = true;
+
+            while (animationQueue.length > 0) {
+                const nextAnimation = animationQueue.shift();
+                if (nextAnimation.type === 'print') {
+                    await animatePopOut(nextAnimation.index, nextAnimation.value);
+                } else if (nextAnimation.type === 'error') {
+                    await animateExplosion(nextAnimation.index);
+                    // After an error, clear the rest of the queue and stop processing
+                    animationQueue = [];
+                    break;
+                }
+            }
+
+            // All animations are done (or an error occurred and stopped), now make the character disappear in place
+            if (character.style.display !== 'none' && character.style.opacity !== '0') { // Only fade out if visible
+                const fadeOutDuration = 300;
+                character.style.transition = `opacity ${fadeOutDuration / 1000}s ease-out`; // Set fade-out transition
+                character.style.opacity = '0'; // Start fading out
+
+                await delay(fadeOutDuration); // Wait for fade-out to complete
+                character.style.display = 'none'; // Hide after fading
+                character.style.opacity = '1'; // Reset opacity for next appearance
+            }
+
+            isAnimating = false;
+        }
+
+
+        // コードを実行する関数
+        runButton.addEventListener('click', async () => {
+            const code = codeEditor.value;
+            let arrayMatch = code.match(/array\s*=\s*\[(.*?)\]/);
+
+            // Clear previous animations and reset character if a new animation sequence is starting
+            if (isAnimating) {
+                animationQueue = []; // Clear current queue
+                // Force character reset immediately
+                character.style.transition = 'none';
+                character.style.transform = 'translateX(-100%)'; // Ensure character starts off-screen
+                character.style.opacity = '0'; // Ensure it's fully transparent
+                character.style.display = 'none';
+                isAnimating = false; // Reset flag
+            }
+
+            outputMessage.textContent = '出力: '; // 出力メッセージを初期状態に戻す
+
+            if (arrayMatch) {
+                try {
+                    // 配列の文字列をJavaScriptの配列に変換
+                    const arrayContent = `[${arrayMatch[1]}]`;
+                    currentArray = JSON.parse(arrayContent);
+                    renderArray(currentArray);
+                } catch (e) {
+                    outputMessage.textContent = 'エラー: 配列の形式が正しくありません。';
+                    console.error("配列パースエラー:", e);
+                    return;
+                }
+            } else {
+                outputMessage.textContent = 'エラー: "array = [...]" の形式で配列を定義してください。';
+                return;
+            }
+
+            // Find all print statements
+            const printRegex = /print\s*\(array\[(\d+)\]\)/g; // Global flag for all matches
+            let match;
+            let foundPrintStatements = false;
+            let errorOccurredInParsing = false;
+
+            while ((match = printRegex.exec(code)) !== null) {
+                foundPrintStatements = true;
+                const indexToAccess = parseInt(match[1], 10);
+                if (indexToAccess >= 0 && indexToAccess < currentArray.length) {
+                    const value = currentArray[indexToAccess];
+                    animationQueue.push({ type: 'print', index: indexToAccess, value: value });
+                } else {
+                    // Out of bounds error
+                    animationQueue.push({ type: 'error', index: indexToAccess });
+                    errorOccurredInParsing = true;
+                    // Stop processing further print statements if an error occurs
+                    break;
+                }
+            }
+
+            if (!foundPrintStatements && animationQueue.length === 0 && !errorOccurredInParsing) {
+                outputMessage.textContent = 'ヒント: "print(array[インデックス])" の形式で要素にアクセスしてください。';
+            } else if (animationQueue.length > 0) {
+                processAnimationQueue(); // Start processing the queue
+            }
+        });
+
+        // 初期表示として配列をレンダリング
+        window.onload = () => {
+            runButton.click(); // ページロード時に一度実行して初期状態を表示
+        };
+    </script>
+</body>
+</html>
