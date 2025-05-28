@@ -14,12 +14,12 @@
             justify-content: center;
             align-items: flex-start; /* Align to top for vertical content */
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px; /* Reduced padding */
             box-sizing: border-box;
         }
         #app-container {
             width: 100%;
-            max-width: 400px; /* Max width for smartphone vertical screen */
+            max-width: 360px; /* Reduced max-width for smaller mobile screens */
             background-color: #ffffff;
             border-radius: 16px;
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
@@ -116,7 +116,7 @@
             align-items: center; /* Vertically center content */
             min-height: 48px; /* Approximate height of the button */
         }
-        
+
         #character {
             position: absolute;
             background-color: #8B5CF6; /* Purple */
@@ -177,7 +177,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100 flex items-center justify-content-center min-h-screen">
     <div id="app-container" class="flex flex-col p-6 space-y-6">
         <h1 class="text-2xl font-bold text-center text-gray-800">Python配列ビジュアライザー</h1>
 
@@ -190,20 +190,26 @@ print(array[0])"></textarea>
             <button id="run-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105">
                 実行
             </button>
+            <button id="explain-code-button" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 mt-2">
+                ✨コード解説✨
+            </button>
         </div>
 
         <div class="flex flex-col space-y-4 items-center">
-            <h2 class="text-xl font-bold text-gray-800">配列工場:</h2>
-            <div id="array-visualization" class="flex flex-wrap justify-center items-end min-h-[150px] relative">
+            <h2 class="text-xl font-bold text-gray-800">出力:</h2>
+            <div id="array-visualization" class="flex flex-nowrap items-end min-h-[150px] relative overflow-x-auto justify-content-start">
                 <div id="character" style="display: none; opacity: 0;">🤖</div>
             </div>
             <div id="output-message" class="output-message w-full mt-4">出力: </div>
         </div>
     </div>
-    <div id="explosion-flash"></div> <script>
+    <div id="explosion-flash"></div> 
+
+    <script>
         // DOM要素の参照を取得
         const codeEditor = document.getElementById('code-editor');
         const runButton = document.getElementById('run-button');
+        const explainCodeButton = document.getElementById('explain-code-button'); // New button
         const arrayVisualization = document.getElementById('array-visualization');
         const outputMessage = document.getElementById('output-message');
         const character = document.getElementById('character'); // Get character element
@@ -495,10 +501,56 @@ print(array[10]) # This will cause an out-of-range error`;
             }
         });
 
+        // Gemini API integration for code explanation
+        explainCodeButton.addEventListener('click', async () => {
+            const code = codeEditor.value;
+            if (!code.trim()) {
+                outputMessage.textContent = '出力: 解説するコードがありません。';
+                return;
+            }
+
+            outputMessage.textContent = '出力: コードを解析中... ✨';
+            outputMessage.classList.remove('hidden'); // Ensure it's visible
+
+            try {
+                let chatHistory = [];
+                const prompt = `以下のPythonコードについて、配列操作に焦点を当てて簡潔に説明してください。
+                
+コード:
+\`\`\`python
+${code}
+\`\`\``;
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    outputMessage.textContent = `出力: ${text}`;
+                } else {
+                    outputMessage.textContent = '出力: 解説を生成できませんでした。';
+                    console.error("Gemini API response error:", result);
+                }
+            } catch (error) {
+                outputMessage.textContent = '出力: 解説の生成中にエラーが発生しました。';
+                console.error("Error calling Gemini API:", error);
+            }
+        });
+
         // 初期表示として配列をレンダリング
         window.onload = () => {
             runButton.click(); // ページロード時に一度実行して初期状態を表示
-        };
+        }
     </script>
 </body>
 </html>
